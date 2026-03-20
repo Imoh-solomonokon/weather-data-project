@@ -1,0 +1,121 @@
+# This file is going to contain code that will allow us access and configure the apps that we need
+
+x-superset-user: &superset-user root
+x-superset-volumes: &superset-volumes
+  # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+  - ./docker:/app/docker
+  # - ./superset:/app/superset
+  - ./docker/superset_config.py:/app/pythonpath/superset_config.py
+
+services:
+  db:
+    container_name: postgres_container
+    image: postgres:15.17
+    ports:
+      - 5000:5432
+    environment:
+      POSTGRES_DB: db
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_password
+    volumes: # I want postgres to save its files to a local directory on my machine so that I can access them and also so that I don't lose data when the container is stopped or removed.
+      - ./postgres/data:/var/lib/postgresql/data # I want docker to save the postgres data to a local directory called postgres/data in the root of my project. This will allow me to access the data and also ensure that I don't lose data when the container is stopped or removed. 
+      - ./postgres/airflow_init.sql:/docker-entrypoint-initdb.d/airflow_init.sql # I want to run a sql script that will create a user and a database for airflow when the postgres container is initialized. This will allow us to have a ready-to-use database for airflow when it starts up.
+      - ./postgres/superset_init.sql:/docker-entrypoint-initdb.d/superset_init.sql # I want to run a sql script that will create a user and a database for superset when the postgres container is initialized. This will allow us to have a ready-to-use database for superset when it starts up.
+    networks:
+      - my-network 
+          
+  af:
+    container_name: airflow_container
+    image: apache/airflow:3.1.8
+    ports:
+      - 8000:8080
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow_db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./api-request:/opt/airflow/api-request
+      - /var/run/docker.sock:/var/run/docker.sock # I want to mount the docker socket inside the airflow container so that I can run docker commands from within the container. This will allow us to run dbt commands from within the airflow container and also allow us to run other docker commands if needed.
+    group_add:
+      - '1001' # I want to add the airflow user to the docker group so that it has permission to access the docker socket and run docker commands. The docker group has a GID of 1001 on my machine, so I am adding that GID to the airflow container.
+    depends_on: # to run the service after posgres starts up
+      - db      
+    networks:
+      - my-network  
+    command: >
+      bash -c "airflow db migrate && airflow standalone"
+
+  dbt:
+    container_name: dbt_container
+    image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+    volumes:
+      - ./dbt/my_project:/usr/app
+      - ./dbt:/root/.dbt
+    working_dir: /usr/app
+    environment:
+      DBT_PROFILES_DIR: "/root/.dbt"
+    depends_on:
+      - db
+    networks:
+      - my-network
+    command: run
+
+  superset-init:
+    image: apache/superset:3.0.0-py310
+    command: ["/app/docker/docker-init.sh"]
+    env_file:
+      - path: docker/.env # default
+        required: true
+    depends_on:
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    user: *superset-user
+    volumes: *superset-volumes
+    environment:
+      SUPERSET_LOAD_EXAMPLES: "no"
+      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+      DATABASE_DB: "superset_db"
+    healthcheck:
+      disable: true
+    networks:
+      - my-network  
+
+  superset:
+    image: apache/superset:3.0.0-py310
+    env_file:
+      - path: docker/.env # default
+        required: true
+    command: ["/app/docker/docker-bootstrap.sh", "app"]
+    restart: unless-stopped
+    ports:
+      - ${SUPERSET_PORT:-8088}:8088
+    user: *superset-user
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    volumes: *superset-volumes
+    environment:
+      SUPERSET_LOG_LEVEL: "${SUPERSET_LOG_LEVEL:-info}"
+      DATABASE_DB: "superset_db"
+    networks:
+      - my-network
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis:/data
+    networks:
+      - my-network      
+
+# I want airflow, dbt and postgres to communicate with each other internally using a custom network. This will allow them to communicate with each other using their service names (db and af) instead of using localhost or IP addresses, which can be more reliable and easier to manage in a Docker environment.
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  redis:
+    external: false

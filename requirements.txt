@@ -1,0 +1,5 @@
+apache-airflow
+apache-airflow-providers-docker
+psycopg2-binary
+requests
+python-dotenv

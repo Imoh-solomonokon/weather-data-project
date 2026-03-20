@@ -1,0 +1,39 @@
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables and secrets
+.env
+*.env
+
+# Docker volumes and runtime data
+var/
+postgres/data/
+
+# dbt
+dbt/my_project/target/
+dbt/my_project/logs/
+dbt/.user.yml
+dbt/profiles.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
