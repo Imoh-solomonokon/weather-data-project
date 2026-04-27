@@ -1,6 +1,6 @@
 ## 📸 Preview
 
-![Weather Data Report](weather_screenshot.png)
+![Weather Data Report](weather-report-2026-04-27T17-03-56.379Z.jpg)
 
 # 🌤️ Automated Weather Data Pipeline
 
