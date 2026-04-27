@@ -1,7 +1,3 @@
-## 📸 Weather Report Preview
-
-![Weather Data Project](weather_screenshot.png)
-
 # 🌤️ Automated Weather Data Pipeline
 
 An end-to-end automated ELT pipeline that ingests live weather data from the Weatherstack API, loads it into a PostgreSQL database, transforms it using dbt, and visualises the results in an Apache Superset dashboard — all orchestrated by Apache Airflow running on Windows 11 WSL with Docker.
